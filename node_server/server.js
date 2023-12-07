@@ -43,6 +43,7 @@ const fileFilter = (req, file, cb) => {
 const storeMainImageStorage = multer.diskStorage({
     destination: '/store_images_volume/main',
     filename: (req, file, cb) => {
+        console.log(req.body.crn)
         const fileName = 'main_img' + Date.now() +'.'+ file.originalname.split('.').pop();
         cb(null, fileName);
     },
@@ -75,35 +76,34 @@ const connection = mysql.createConnection({
 });
 
 app.get("/db/my-store-main-image", (req, res) => {
-    let imagePath = req.query.imagePath; // 요청에서 imagePath 쿼리 파라미터 추출
-    
+    const imagePath = decodeURIComponent(req.query.imagePath);
+    console.log(imagePath);
+
     if (!imagePath) {
         return res.status(400).send({ error: "imagePath is required" });
     }
-    const imageBase64 = fs.readFileSync(imagePath, 'base64');
 
-    const responseData = { storeMainImage: imageBase64 }
-
-    res.setHeader('Content-Type', 'image/*');
-    res.json(responseData);
-
+    try {
+        const imageBase64 = fs.readFileSync(imagePath, 'base64');
+        res.setHeader('Content-Type', 'image/*');
+        res.json(imageBase64);
+    } catch (err) {
+        console.error("Error reading file:", err);
+        return res.status(500).send({ error: "Error reading file" });
+    }
 });
 
-
-// 모든 매장 정보를 가져오기 위한 요청
-app.get("/db/storeInfo", (req, res) => {
+// 매장 정보를 가져오는 함수
+function fetchAllStoreInfo(req, res) {
     connection.query(
         'SELECT * FROM STORE_INFO',
         (err, results, fields) => {
             if (!err) {
                 
                 if (results.length > 0) {
-                    const responseData = results.map( storeInfo => {
+                    const responseData = results.map(storeInfo => {
                         console.log(storeInfo)
 
-                        // '/store_images_volume/main/main_img1707753283856.jpg'
-                        //const imageBase64 = fs.readFileSync(imgPath, 'base64');
-                        console.log("IMAGE_PATH: " + storeInfo.IMAGE_PATH)
                         return {
                             storeName: storeInfo.STORE_NAME,
                             imagePath: storeInfo.IMAGE_PATH,
@@ -129,7 +129,11 @@ app.get("/db/storeInfo", (req, res) => {
             }
         }
     );
-});
+}
+
+// 모든 매장 정보를 가져오기 위한 요청
+app.get("/db/storeInfo", fetchAllStoreInfo);
+
 
 // 내가 등록한 매장을 확인하기 위한 요청
 app.get("/db/storeInfo/:crn", (req, res) =>{
@@ -141,10 +145,7 @@ app.get("/db/storeInfo/:crn", (req, res) =>{
             if (!err) {
                 // 쿼리가 성공하면 결과를 클라이언트에게 보냄
                 const storeInfo = result[0];
-                if(storeInfo){
-                    
-                    // 이미지를 Base64로 인코딩
-                    //const imageBase64 = fs.readFileSync(imgPath, 'base64');            
+                if(storeInfo){           
 
                     // 이미지와 result 데이터를 함께 응답
                     const responseData = {
@@ -297,7 +298,8 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
     const latitude = req.body.latitude;
     const longitude = req.body.longitude;
     const kind = req.body.kind
-    
+
+    console.log(crn);
     // 사용자가 이미지를 수정했을 때
     if(file){
         console.log("이미지를 전달받았습니다.");
@@ -321,7 +323,7 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
                 }else{
 
                 // 이미지 저장 경로 
-                const imagePath = selectResult[0].image_path;
+                const imagePath = selectResult[0].IMAGE_PATH;
                 console.log("imagePath : " + imagePath);
 
                 // 파일이 존재하면 삭제
