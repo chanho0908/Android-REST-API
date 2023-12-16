@@ -12,6 +12,9 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
 RUN npm install -g nodemon
 RUN mkdir -p /usr/src/app
 
+# store_images_volume 폴더 생성
+RUN mkdir /store_images_volume
+
 # WORKDIR은 명령을 실행하기 위한 디렉토리를 설정합니다.
 WORKDIR /usr/src/app
 

@@ -22,6 +22,8 @@ services:
       - mysql
     networks:
       - db-net
+    volumes:
+      - ./node_server/uploads:/store_images_volume
   mysql:
     image: mysql:latest
     restart: always
