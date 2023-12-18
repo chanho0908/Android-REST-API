@@ -11,23 +11,19 @@ app.get('/', (req, res) => {
     res.send("Docker With Nodejs")
 })
 
-app.get('/db/upload', (req, res) => {
-    res.send("Here is DB/images");
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 //정적 파일 제공하기위한 static
 //현재 '/imgaes' 의 디렉토리에 있는 정적 파일에 외부 접근을 허용한 상태
-//app.use(express.static('/store_images_volume'));
+app.use(express.static('/store_images_volume'));
 
 
 // 디스크에 이미지 저장을 위한 multer 설정
 const storage = multer.diskStorage({
     destination: '/store_images_volume',
     filename: (req, file, cb) => {
-        const fileName = req.body.storename + '_main_img.' + file.originalname.split('.').pop();
+        const fileName = 'main_img' + Date.now() +'.'+ file.originalname.split('.').pop();
         cb(null, fileName);
     }
 });
@@ -44,18 +40,24 @@ const connection = mysql.createConnection({
 
 app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
-    console.log("des : " + req.file.path);
 
     try {
         const file = req.file;
         const storename = req.body.storename;
+        const ceoName = req.body.ceoName;
+        const CRN = req.body.CRN;
+        const contact = req.body.contact;
+        const address = req.body.address;
+        const latitude = req.body.latitude;
+        const longitude = req.body.longitude;
+        const kind = req.body.kind;
 
         if (file) {
             const filePath = file.path;
 
             connection.query(
-                'INSERT INTO STORE_IMAGES (STORENAME, IMAGE_PATH) VALUES (?, ?)',
-                [storename, filePath],
+                'INSERT INTO STORE_INFO(STORENAME, IMAGE_PATH, ceoName, CRN, contact, address, latitude, longitude, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [storename, filePath, ceoName, CRN, contact, address, latitude, longitude, kind],
 
                 (err, results, fields) => {
                     if (!err) {
