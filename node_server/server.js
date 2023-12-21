@@ -21,6 +21,21 @@ app.use(express.urlencoded({ extended: true }));
 //현재 '/store_images_volume' 의 디렉토리에 있는 정적 파일에 외부 접근을 허용한 상태
 app.use(express.static('/store_images_volume'));
 
+const fileFilter = (req, file, cb) => {
+    // 확장자 필터링
+    if (
+        file.mimetype === "image/png" ||
+        file.mimetype === "image/jpg" ||
+        file.mimetype === "image/jpeg"
+    ) {
+        cb(null, true); // 해당 mimetype만 받겠다는 의미
+    } else {
+        // 다른 mimetype은 저장되지 않음
+        req.fileValidationError = "jpg,jpeg,png,gif,webp 파일만 업로드 가능합니다.";
+        cb(null, false);
+    }
+};
+
 
 // 디스크에 이미지 저장을 위한 multer 설정
 const storage = multer.diskStorage({
@@ -28,7 +43,10 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => {
         const fileName = 'main_img' + Date.now() +'.'+ file.originalname.split('.').pop();
         cb(null, fileName);
-    }
+    },
+    fileFilter : fileFilter,
+    //최대 30MB
+    limits: { fileSize: 30 * 1024 * 1024 } 
 });
 
 const upload = multer({ storage: storage });
@@ -99,6 +117,7 @@ app.get("/db/companyregisternumber", (req, res) =>{
     )
 })
 
+
 app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
 
@@ -138,6 +157,59 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
         //res.status(500).send("오류 발생");
     }
 });
+
+app.delete("/db/delete-storeinfo/:crn", (req, res)=>{
+    console.log("delete 요청이 수신 되었습니다.");
+    const crn = req.params.crn;
+    
+    connection.query(
+        `SELECT image_path FROM STORE_INFO WHERE CRN = ${crn} `,
+        (selectErr, selectResult, selectFields) =>{
+            if (selectErr) {
+                console.error("MySQL 데이터 조회 오류:", selectErr);
+                res.status(500).send("Internal Server Error");
+                return;
+            }
+
+            if (selectResult.length === 0) {
+                // 해당 CRN에 대한 데이터가 없는 경우
+                res.status(404).send("Data not found");
+                return;
+            }
+            
+            const imagePath = selectResult[0].image_path;
+            
+            if(fs.existsSync(imagePath)){
+                try{
+                    fs.unlink(imagePath, (unLinkErr) => {
+                        if (unLinkErr) {
+                            console.error("이미지 파일 삭제 오류:", unLinkErr);
+                            res.status(500).send("Internal Server Error");
+                            return;
+                        }
+
+                    connection.query(
+                        `DELETE FROM STORE_INFO WHERE CRN = '${crn}'`,
+                        (delErr, delResult, delFields)=>{
+                            if (delErr) {
+                                console.error("MySQL 데이터 삭제 오류:", delErr);
+                                res.status(500).send("Internal Server Error");
+                                return;
+                            }
+                            // 이미지 파일과 데이터 모두 삭제 성공
+                            res.status(200).send("Data and image deleted successfully");
+                        }
+                        )
+                    })
+                }catch (error) {
+                    console.log(error);
+                }
+            }else{
+                console.log('삭제하려는 이미지가 존재하지 않습니다.');
+            }
+        }
+    )
+})
 
 app.listen(port, () => {
     console.log("서버가 3000 포트에서 실행 중입니다.");
