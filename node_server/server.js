@@ -1,21 +1,24 @@
 // server.js
+// NET Stop HTTP
 const express = require('express');
 const multer = require('multer');
-const crypto = require('crypto');
+const fs = require('fs');
 const mysql = require('mysql2');
+const { log } = require('console');
 const app = express();
 const port = 3000;
 
-// Localhost:80 또는 3000으로 들어오는 요청을 받음
+//Localhost:80 또는 3000으로 들어오는 요청을 받음
 app.get('/', (req, res) => {
     res.send("Docker With Nodejs")
 })
 
 app.use(express.json());
+// post 요청 시 값을 객체로 바꿔줌
 app.use(express.urlencoded({ extended: true }));
 
 //정적 파일 제공하기위한 static
-//현재 '/imgaes' 의 디렉토리에 있는 정적 파일에 외부 접근을 허용한 상태
+//현재 '/store_images_volume' 의 디렉토리에 있는 정적 파일에 외부 접근을 허용한 상태
 app.use(express.static('/store_images_volume'));
 
 
@@ -37,6 +40,64 @@ const connection = mysql.createConnection({
     password: 'root',
     database: 'cloudbridge_database'
 });
+
+app.get("/db/storeinfo/:crn", (req, res) =>{
+    const crn = req.params.crn
+    connection.query(
+        `SELECT * FROM STORE_INFO WHERE crn = '${crn}'`,
+        (err, result, fields) => {
+            if (!err) {
+                // 쿼리가 성공하면 결과를 클라이언트에게 보냄
+                const storeInfo = result[0];
+                if(storeInfo){
+                    const imgPath = storeInfo.image_path;
+
+                    // 이미지 경로 삭제
+                    delete storeInfo.image_path;
+
+                    // 이미지를 Base64로 인코딩
+                    const imageBase64 = fs.readFileSync(imgPath, 'base64');
+
+                    // 이미지와 result 데이터를 함께 응답
+                    const responseData = {
+                        image: imageBase64,
+                        result: storeInfo
+                    };
+
+                    res.json(responseData);
+                }else{
+                    res.status(404).send("Store not found");
+                }
+            } else {
+                // 쿼리 오류 시 에러를 클라이언트에게 보냄
+                console.error("Error executing query:", err);
+                res.status(500).send("Internal Server Error");
+            }
+        }
+    )
+})
+
+app.get("/db/companyregisternumber", (req, res) =>{
+    connection.query(
+        'SELECT crn FROM STORE_INFO',
+        (err, result, fields) => {
+            if (!err) {
+                console.log(result)
+                if (result && result.length > 0) {
+                    // 결과가 있을 때 (하나 이상의 행이 반환된 경우)
+
+                    // 여기서는 배열의 첫 번째 행의 'crn' 속성을 응답으로 보내고 있습니다.
+                    res.json(result);
+                }else{
+                    res.status(404).send("Store not found");
+                }
+            } else {
+                console.error("Error executing query:", err);
+                res.status(500).send("Internal Server Error");
+            }
+        }
+    )
+})
 
 app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
