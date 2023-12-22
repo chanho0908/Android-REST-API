@@ -62,7 +62,8 @@ const connection = mysql.createConnection({
 app.get("/db/storeinfo/:crn", (req, res) =>{
     const crn = req.params.crn
     connection.query(
-        `SELECT * FROM STORE_INFO WHERE crn = '${crn}'`,
+        `SELECT * FROM STORE_INFO WHERE crn = ?`,
+        [crn],
         (err, result, fields) => {
             if (!err) {
                 // 쿼리가 성공하면 결과를 클라이언트에게 보냄
@@ -75,6 +76,8 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 
                     // 이미지를 Base64로 인코딩
                     const imageBase64 = fs.readFileSync(imgPath, 'base64');
+
+                    res.setHeader('Content-Type', 'image/*');
 
                     // 이미지와 result 데이터를 함께 응답
                     const responseData = {
@@ -101,10 +104,8 @@ app.get("/db/companyregisternumber", (req, res) =>{
         (err, result, fields) => {
             if (!err) {
                 console.log(result)
-                if (result && result.length > 0) {
+                if (result) {
                     // 결과가 있을 때 (하나 이상의 행이 반환된 경우)
-
-                    // 여기서는 배열의 첫 번째 행의 'crn' 속성을 응답으로 보내고 있습니다.
                     res.json(result);
                 }else{
                     res.status(404).send("Store not found");
@@ -158,12 +159,93 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     }
 });
 
-app.delete("/db/delete-storeinfo/:crn", (req, res)=>{
+app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
+    console.log("put 요청이 수신 되었습니다.");
+
+    const file = req.file;
+    const storename = req.body.storename;
+    const ceoName = req.body.ceoName;
+    const crn = req.body.CRN;
+    const contact = req.body.contact;
+    const address = req.body.address;
+    const latitude = req.body.latitude;
+    const longitude = req.body.longitude;
+    const kind = req.body.kind;
+
+    console.log(storename);
+    console.log(file);
+    if (file) {
+        // 수정 이미지 경로
+        const filePath = file.path;
+        console.log(filePath);
+
+        // 1. 기존 이미지 저장 경로 추출
+        connection.query( 
+            `SELECT image_path FROM STORE_INFO WHERE CRN = ?`,
+            [crn],
+            (selectErr, selectResult, selectFields) =>{
+                if (selectErr) {
+                    console.error("MySQL 데이터 조회 오류:", selectErr);
+                    res.status(500).send("Internal Server Error");
+                    return;
+                }
+
+                if (selectResult.length === 0) {
+                    // 해당 CRN에 대한 데이터가 없는 경우
+                    res.status(404).send("Data not found");
+                    return;
+                }
+                
+                // 이미지 저장 경로 
+                const imagePath = selectResult[0].image_path;
+                console.log(imagePath);
+
+                // 파일이 존재하면 삭제
+                if(fs.existsSync(imagePath)){
+                    try{
+                        fs.unlink(imagePath, (unLinkErr) => {
+                            if (unLinkErr) {
+                                console.error("이미지 파일 삭제 오류:", unLinkErr);
+                                res.status(500).send("Internal Server Error");
+                                return;
+                            }
+                        // 2. 업데이트 실행    
+                        connection.query(
+                            `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=?, image_path=? WHERE CRN=?`,
+                            [storename, ceoName, contact, address, latitude, longitude, kind, filePath, crn],
+
+                            (modifyErr, modifyResult, modifyFields) =>{
+                                if (modifyErr) {
+                                    console.error("MySQL 데이터 수정 오류:", modifyErr);
+                                    res.status(500).send("Internal Server Error");
+                                    return;
+                                }
+
+                                res.status(200).send("Data and image deleted successfully");
+                            }
+
+                        
+                            )})
+                    }catch (error) {
+                        console.log(error);
+                    }
+                }else{
+                    console.log('삭제하려는 이미지가 존재하지 않습니다.');
+                }
+
+            }
+        )
+    }   
+    
+})
+
+app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
     console.log("delete 요청이 수신 되었습니다.");
     const crn = req.params.crn;
     
     connection.query(
-        `SELECT image_path FROM STORE_INFO WHERE CRN = ${crn} `,
+        `SELECT image_path FROM STORE_INFO WHERE CRN = ? `,
+        [crn],
         (selectErr, selectResult, selectFields) =>{
             if (selectErr) {
                 console.error("MySQL 데이터 조회 오류:", selectErr);
@@ -189,7 +271,8 @@ app.delete("/db/delete-storeinfo/:crn", (req, res)=>{
                         }
 
                     connection.query(
-                        `DELETE FROM STORE_INFO WHERE CRN = '${crn}'`,
+                        `DELETE FROM STORE_INFO WHERE CRN = ?`,
+                        [crn],
                         (delErr, delResult, delFields)=>{
                             if (delErr) {
                                 console.error("MySQL 데이터 삭제 오류:", delErr);
@@ -210,6 +293,9 @@ app.delete("/db/delete-storeinfo/:crn", (req, res)=>{
         }
     )
 })
+
+function deleteImageFile(crn, callback){
+}
 
 app.listen(port, () => {
     console.log("서버가 3000 포트에서 실행 중입니다.");
