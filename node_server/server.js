@@ -59,6 +59,48 @@ const connection = mysql.createConnection({
     database: 'cloudbridge_database'
 });
 
+app.get("/db/storeinfo", (req, res) => {
+    connection.query(
+        'SELECT * FROM STORE_INFO',
+        (err, results, fields) => {
+            if (!err) {
+                // Check if there are results from the query
+                if (results.length > 0) {
+                    const responseData = results.map(storeInfo => {
+                        // Get image path and remove it from the object
+                        const imgPath = storeInfo.image_path;
+                        delete storeInfo.image_path;
+
+                        // Read image file and encode to Base64
+                        const imageBase64 = fs.readFileSync(imgPath, 'base64');
+
+                        // Construct the response for each store
+                        return {
+                            storename: storeInfo.storename,
+                            image: imageBase64,
+                            ceoName: storeInfo.ceoName,
+                            CRN: storeInfo.CRN,
+                            contact: storeInfo.contact,
+                            address: storeInfo.address,
+                            latitude: storeInfo.latitude,
+                            longitude: storeInfo.longitude,
+                            kind: storeInfo.kind
+                        };
+                    });
+
+                    res.json(responseData);
+                } else {
+                    res.status(404).send("No stores found");
+                }
+            } else {
+                console.error("Error executing query:", err);
+                res.status(500).send("Internal Server Error");
+            }
+        }
+    );
+});
+
+
 app.get("/db/storeinfo/:crn", (req, res) =>{
     const crn = req.params.crn
     connection.query(
