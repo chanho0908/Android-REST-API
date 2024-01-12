@@ -76,10 +76,10 @@ app.get("/db/storeinfo", (req, res) => {
 
                         // Construct the response for each store
                         return {
-                            storename: storeInfo.storename,
+                            storeName: storeInfo.storename,
                             image: imageBase64,
                             ceoName: storeInfo.ceoName,
-                            CRN: storeInfo.CRN,
+                            crn: storeInfo.CRN,
                             contact: storeInfo.contact,
                             address: storeInfo.address,
                             latitude: storeInfo.latitude,
@@ -115,7 +115,7 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 
                     // 이미지 경로 삭제
                     delete storeInfo.image_path;
-
+                    
                     // 이미지를 Base64로 인코딩
                     const imageBase64 = fs.readFileSync(imgPath, 'base64');
 
@@ -123,8 +123,15 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 
                     // 이미지와 result 데이터를 함께 응답
                     const responseData = {
+                        storeName: storeInfo.storename,
                         image: imageBase64,
-                        result: storeInfo
+                        ceoName: storeInfo.ceoName,
+                        crn: storeInfo.CRN,
+                        contact: storeInfo.contact,
+                        address: storeInfo.address,
+                        latitude: storeInfo.latitude,
+                        longitude: storeInfo.longitude,
+                        kind: storeInfo.kind
                     };
 
                     res.json(responseData);
@@ -166,9 +173,9 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
 
     try {
         const file = req.file;
-        const storename = req.body.storename;
+        const storename = req.body.storeName;
         const ceoName = req.body.ceoName;
-        const CRN = req.body.CRN;
+        const CRN = req.body.crn;
         const contact = req.body.contact;
         const address = req.body.address;
         const latitude = req.body.latitude;
@@ -201,7 +208,7 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     }
 });
 
-app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
+app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
     console.log("put 요청이 수신 되었습니다.");
 
     const file = req.file;
@@ -213,13 +220,11 @@ app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
     const latitude = req.body.latitude;
     const longitude = req.body.longitude;
     const kind = req.body.kind;
+    const isImgChanged = req.body.isImgChanged;
 
-    console.log(storename);
-    console.log(file);
     if (file) {
         // 수정 이미지 경로
         const filePath = file.path;
-        console.log(filePath);
 
         // 1. 기존 이미지 저장 경로 추출
         connection.query( 
