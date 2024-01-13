@@ -59,6 +59,7 @@ const connection = mysql.createConnection({
     database: 'cloudbridge_database'
 });
 
+// 모든 매장 정보를 가져오기 위한 요청
 app.get("/db/storeinfo", (req, res) => {
     connection.query(
         'SELECT * FROM STORE_INFO',
@@ -67,14 +68,12 @@ app.get("/db/storeinfo", (req, res) => {
                 // Check if there are results from the query
                 if (results.length > 0) {
                     const responseData = results.map(storeInfo => {
-                        // Get image path and remove it from the object
+                        
                         const imgPath = storeInfo.image_path;
                         delete storeInfo.image_path;
 
-                        // Read image file and encode to Base64
                         const imageBase64 = fs.readFileSync(imgPath, 'base64');
 
-                        // Construct the response for each store
                         return {
                             storeName: storeInfo.storename,
                             image: imageBase64,
@@ -100,7 +99,7 @@ app.get("/db/storeinfo", (req, res) => {
     );
 });
 
-
+// 내가 등록한 매장을 확인하기 위한 요청
 app.get("/db/storeinfo/:crn", (req, res) =>{
     const crn = req.params.crn
     connection.query(
@@ -147,6 +146,8 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
     )
 })
 
+// 사업자 등록번호 중복 방지를 위해
+// 저장된 사업자 등록 번호를 전달합니다.
 app.get("/db/companyregisternumber", (req, res) =>{
     connection.query(
         'SELECT crn FROM STORE_INFO',
@@ -167,7 +168,7 @@ app.get("/db/companyregisternumber", (req, res) =>{
     )
 })
 
-
+// 새로운 매장 정보 저장
 app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
 
@@ -204,7 +205,7 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
         }
     } catch (err) {
         console.error(err);
-        //res.status(500).send("오류 발생");
+        res.status(500).send("오류 발생");
     }
 });
 
@@ -219,10 +220,11 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
     const address = req.body.address;
     const latitude = req.body.latitude;
     const longitude = req.body.longitude;
-    const kind = req.body.kind;
-    const isImgChanged = req.body.isImgChanged;
+    const kind = req.body.kind
     
-    if(isImgChanged == "done"){
+    // 사용자가 이미지를 수정했을 때
+    if(file){
+        console.log("이미지를 전달받았습니다.");
         // 수정 이미지 경로
         const filePath = file.path;
 
@@ -232,21 +234,23 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
             [crn],
             (selectErr, selectResult, selectFields) =>{
                 if (selectErr) {
-                    console.error("MySQL 데이터 조회 오류:", selectErr);
+                    console.log("MySQL 데이터 조회 오류:", selectErr);
                     res.status(500).send("Internal Server Error");
                     return;
                 }else if (selectResult.length === 0) {
                     // 해당 CRN에 대한 데이터가 없는 경우
+                    console.log("해당 사업자 등록번호에 등록된 정보가 없습니다.");
                     res.status(404).send("Data not found");
                     return;
                 }else{
 
                 // 이미지 저장 경로 
                 const imagePath = selectResult[0].image_path;
-                console.log(imagePath);
+                console.log("imagePath : " + imagePath);
 
                 // 파일이 존재하면 삭제
                 if(fs.existsSync(imagePath)){
+                    console.log("파일이 존재합니다. 이미지를 제거합니다.");
                     try{
                         fs.unlink(imagePath, (unLinkErr) => {
                             if (unLinkErr) {
@@ -255,6 +259,7 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                                 return;
                             }
                         // 2. 업데이트 실행    
+                        console.log("MySQL 데이터를 업데이트 합니다.");
                         connection.query(
                             `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=?, image_path=? WHERE CRN=?`,
                             [storename, ceoName, contact, address, latitude, longitude, kind, filePath, crn],
@@ -266,7 +271,7 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                                     return;
                                 }
 
-                                res.status(200).send("Data and image deleted successfully");
+                                res.status(200).send("데이터 수정 성공");
                             }
 
                         
@@ -280,6 +285,8 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
             }}
         )
     }else{
+        // 사용자가 이미지를 수정하지 않았을 때
+        // 전달받은 MySQL Data만 업데이트 합니다.
         connection.query(
             `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=? WHERE CRN=?`,
             [storename, ceoName, contact, address, latitude, longitude, kind, crn],
@@ -297,28 +304,34 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
     
 })
 
+// 데이터 삭제
 app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
     console.log("delete 요청이 수신 되었습니다.");
     const crn = req.params.crn;
     
+    // 사업자 등록번호를 Primary Key로 저장된 이미지 경로를 가져옵니다.
     connection.query(
         `SELECT image_path FROM STORE_INFO WHERE CRN = ? `,
         [crn],
         (selectErr, selectResult, selectFields) =>{
+            // MySQL 에러
             if (selectErr) {
                 console.error("MySQL 데이터 조회 오류:", selectErr);
                 res.status(500).send("Internal Server Error");
                 return;
             }
 
+            // // 해당 CRN에 대한 데이터가 없는 경우
             if (selectResult.length === 0) {
-                // 해당 CRN에 대한 데이터가 없는 경우
+                console.log("해당 사업자 등록번호로 저장된 정보가 없습니다.")
                 res.status(404).send("Data not found");
                 return;
             }
             
+            // 이미지 경로
             const imagePath = selectResult[0].image_path;
             
+            // Local Directory에 이미지가 존재하면 제거
             if(fs.existsSync(imagePath)){
                 try{
                     fs.unlink(imagePath, (unLinkErr) => {
@@ -327,7 +340,8 @@ app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
                             res.status(500).send("Internal Server Error");
                             return;
                         }
-
+                    
+                    // 저장된 데이터 제거
                     connection.query(
                         `DELETE FROM STORE_INFO WHERE CRN = ?`,
                         [crn],
