@@ -212,17 +212,17 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
     console.log("put 요청이 수신 되었습니다.");
 
     const file = req.file;
-    const storename = req.body.storename;
+    const storename = req.body.storeName;
     const ceoName = req.body.ceoName;
-    const crn = req.body.CRN;
+    const crn = req.body.crn;
     const contact = req.body.contact;
     const address = req.body.address;
     const latitude = req.body.latitude;
     const longitude = req.body.longitude;
     const kind = req.body.kind;
     const isImgChanged = req.body.isImgChanged;
-
-    if (file) {
+    
+    if(isImgChanged == "done"){
         // 수정 이미지 경로
         const filePath = file.path;
 
@@ -235,14 +235,12 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                     console.error("MySQL 데이터 조회 오류:", selectErr);
                     res.status(500).send("Internal Server Error");
                     return;
-                }
-
-                if (selectResult.length === 0) {
+                }else if (selectResult.length === 0) {
                     // 해당 CRN에 대한 데이터가 없는 경우
                     res.status(404).send("Data not found");
                     return;
-                }
-                
+                }else{
+
                 // 이미지 저장 경로 
                 const imagePath = selectResult[0].image_path;
                 console.log(imagePath);
@@ -279,10 +277,23 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                 }else{
                     console.log('삭제하려는 이미지가 존재하지 않습니다.');
                 }
-
-            }
+            }}
         )
-    }   
+    }else{
+        connection.query(
+            `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=? WHERE CRN=?`,
+            [storename, ceoName, contact, address, latitude, longitude, kind, crn],
+            (modifyErr, modifyResult, modifyFields) => {
+                if (modifyErr) {
+                    console.error("MySQL 데이터 수정 오류:", modifyErr);
+                    res.status(500).send("Internal Server Error");
+                    return;
+                }
+
+                res.status(200).send("Data updated successfully");
+            }
+        );
+    }
     
 })
 
@@ -341,8 +352,6 @@ app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
     )
 })
 
-function deleteImageFile(crn, callback){
-}
 
 app.listen(port, () => {
     console.log("서버가 3000 포트에서 실행 중입니다.");
