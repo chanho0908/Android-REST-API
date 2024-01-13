@@ -11,6 +11,8 @@ DBMS : MySQL
 
 #### 🎉 [GET] 사업자 등록번호 조회 Request
 ```
+// 사업자 등록번호 중복 방지를 위해
+// 저장된 사업자 등록 번호를 전달합니다.
 app.get("/db/companyregisternumber", (req, res) =>{
     connection.query(
         'SELECT crn FROM STORE_INFO',
@@ -79,14 +81,15 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 #### 🎉 [POST] 나의 매장 등록 Request
 ```
 
+// 새로운 매장 정보 저장
 app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
 
     try {
         const file = req.file;
-        const storename = req.body.storename;
+        const storename = req.body.storeName;
         const ceoName = req.body.ceoName;
-        const CRN = req.body.CRN;
+        const CRN = req.body.crn;
         const contact = req.body.contact;
         const address = req.body.address;
         const latitude = req.body.latitude;
@@ -115,7 +118,7 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
         }
     } catch (err) {
         console.error(err);
-        //res.status(500).send("오류 발생");
+        res.status(500).send("오류 발생");
     }
 });
 ```
@@ -123,23 +126,25 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
 ![image](https://github.com/chanho0908/android_Docker_server/assets/84930748/a4007651-58e6-4f90-bc3b-c7e1763b2c93)
 
 #### 🎉 [PUT] 매장 정보 수정
+#### 사용자가 매장 사진을 수정했을 때/수정하지 않았을 때 이미지 전송 여부에 따라 분기 처리 했습니다.
 ```
-app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
+
+app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
     console.log("put 요청이 수신 되었습니다.");
 
     const file = req.file;
-    const storename = req.body.storename;
+    const storename = req.body.storeName;
     const ceoName = req.body.ceoName;
-    const crn = req.body.CRN;
+    const crn = req.body.crn;
     const contact = req.body.contact;
     const address = req.body.address;
     const latitude = req.body.latitude;
     const longitude = req.body.longitude;
-    const kind = req.body.kind;
-
-    console.log(storename);
-    console.log(file);
-    if (file) {
+    const kind = req.body.kind
+    
+    // 사용자가 이미지를 수정했을 때
+    if(file){
+        console.log("이미지를 전달받았습니다.");
         // 수정 이미지 경로
         const filePath = file.path;
 
@@ -149,23 +154,23 @@ app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
             [crn],
             (selectErr, selectResult, selectFields) =>{
                 if (selectErr) {
-                    console.error("MySQL 데이터 조회 오류:", selectErr);
+                    console.log("MySQL 데이터 조회 오류:", selectErr);
                     res.status(500).send("Internal Server Error");
                     return;
-                }
-
-                if (selectResult.length === 0) {
+                }else if (selectResult.length === 0) {
                     // 해당 CRN에 대한 데이터가 없는 경우
+                    console.log("해당 사업자 등록번호에 등록된 정보가 없습니다.");
                     res.status(404).send("Data not found");
                     return;
-                }
-                
+                }else{
+
                 // 이미지 저장 경로 
                 const imagePath = selectResult[0].image_path;
-                console.log(imagePath);
+                console.log("imagePath : " + imagePath);
 
                 // 파일이 존재하면 삭제
                 if(fs.existsSync(imagePath)){
+                    console.log("파일이 존재합니다. 이미지를 제거합니다.");
                     try{
                         fs.unlink(imagePath, (unLinkErr) => {
                             if (unLinkErr) {
@@ -174,6 +179,7 @@ app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
                                 return;
                             }
                         // 2. 업데이트 실행    
+                        console.log("MySQL 데이터를 업데이트 합니다.");
                         connection.query(
                             `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=?, image_path=? WHERE CRN=?`,
                             [storename, ceoName, contact, address, latitude, longitude, kind, filePath, crn],
@@ -185,7 +191,7 @@ app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
                                     return;
                                 }
 
-                                res.status(200).send("Data and image deleted successfully");
+                                res.status(200).send("데이터 수정 성공");
                             }
 
                         
@@ -196,10 +202,25 @@ app.put("/db/modify-storeinfo", upload.single('storeimage'), (req, res) =>{
                 }else{
                     console.log('삭제하려는 이미지가 존재하지 않습니다.');
                 }
-
-            }
+            }}
         )
-    }   
+    }else{
+        // 사용자가 이미지를 수정하지 않았을 때
+        // 전달받은 MySQL Data만 업데이트 합니다.
+        connection.query(
+            `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=? WHERE CRN=?`,
+            [storename, ceoName, contact, address, latitude, longitude, kind, crn],
+            (modifyErr, modifyResult, modifyFields) => {
+                if (modifyErr) {
+                    console.error("MySQL 데이터 수정 오류:", modifyErr);
+                    res.status(500).send("Internal Server Error");
+                    return;
+                }
+
+                res.status(200).send("Data updated successfully");
+            }
+        );
+    }
     
 })
 ```
