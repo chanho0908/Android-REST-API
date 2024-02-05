@@ -19,7 +19,8 @@ app.use(express.urlencoded({ extended: true }));
 
 //정적 파일 제공하기위한 static
 //현재 '/store_images_volume' 의 디렉토리에 있는 정적 파일에 외부 접근을 허용한 상태
-app.use(express.static('/store_images_volume'));
+app.use(express.static('/store_images_volume/main'));
+app.use(express.static('/store_images_volume/menu'));
 
 const fileFilter = (req, file, cb) => {
     // 확장자 필터링
@@ -38,8 +39,8 @@ const fileFilter = (req, file, cb) => {
 
 
 // 디스크에 이미지 저장을 위한 multer 설정
-const storage = multer.diskStorage({
-    destination: '/store_images_volume',
+const storeMainImageStorage = multer.diskStorage({
+    destination: '/store_images_volume/main',
     filename: (req, file, cb) => {
         const fileName = 'main_img' + Date.now() +'.'+ file.originalname.split('.').pop();
         cb(null, fileName);
@@ -49,7 +50,20 @@ const storage = multer.diskStorage({
     limits: { fileSize: 30 * 1024 * 1024 } 
 });
 
-const upload = multer({ storage: storage });
+// 디스크에 이미지 저장을 위한 multer 설정
+const storeMenuImageStorage = multer.diskStorage({
+    destination: '/store_images_volume/menu',
+    filename: (req, file, cb) => {
+        const fileName = 'menu_img' + Date.now() +'.'+ file.originalname.split('.').pop();
+        cb(null, fileName);
+    },
+    fileFilter : fileFilter,
+    //최대 30MB
+    limits: { fileSize: 30 * 1024 * 1024 } 
+});
+
+const uploadStoreMainImage = multer({ storage: storeMainImageStorage });
+const uploadStoreMenuImage = multer({ storage: storeMenuImageStorage });
 
 // MySQL 연결 설정
 const connection = mysql.createConnection({
@@ -60,30 +74,29 @@ const connection = mysql.createConnection({
 });
 
 // 모든 매장 정보를 가져오기 위한 요청
-app.get("/db/storeinfo", (req, res) => {
+app.get("/db/storeInfo", (req, res) => {
     connection.query(
         'SELECT * FROM STORE_INFO',
         (err, results, fields) => {
             if (!err) {
-                // Check if there are results from the query
+                
                 if (results.length > 0) {
-                    const responseData = results.map(storeInfo => {
-                        
-                        const imgPath = storeInfo.image_path;
-                        delete storeInfo.image_path;
+                    const responseData = results.map( storeInfo => {
+                        console.log(storeInfo)
+                        const imgPath = storeInfo.IMAGE_PATH;
 
                         const imageBase64 = fs.readFileSync(imgPath, 'base64');
 
                         return {
-                            storeName: storeInfo.storename,
+                            storeName: storeInfo.STORE_NAME,
                             image: imageBase64,
-                            ceoName: storeInfo.ceoName,
+                            ceoName: storeInfo.CEO_NAME,
                             crn: storeInfo.CRN,
-                            contact: storeInfo.contact,
-                            address: storeInfo.address,
-                            latitude: storeInfo.latitude,
-                            longitude: storeInfo.longitude,
-                            kind: storeInfo.kind
+                            contact: storeInfo.CONTACT,
+                            address: storeInfo.ADDRESS,
+                            latitude: storeInfo.LATITUDE,
+                            longitude: storeInfo.LONGITUDE,
+                            kind: storeInfo.KIND
                         };
                     });
 
@@ -100,7 +113,7 @@ app.get("/db/storeinfo", (req, res) => {
 });
 
 // 내가 등록한 매장을 확인하기 위한 요청
-app.get("/db/storeinfo/:crn", (req, res) =>{
+app.get("/db/storeInfo/:crn", (req, res) =>{
     const crn = req.params.crn
     connection.query(
         `SELECT * FROM STORE_INFO WHERE crn = ?`,
@@ -110,10 +123,7 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
                 // 쿼리가 성공하면 결과를 클라이언트에게 보냄
                 const storeInfo = result[0];
                 if(storeInfo){
-                    const imgPath = storeInfo.image_path;
-
-                    // 이미지 경로 삭제
-                    delete storeInfo.image_path;
+                    const imgPath = storeInfo.IMAGE_PATH;
                     
                     // 이미지를 Base64로 인코딩
                     const imageBase64 = fs.readFileSync(imgPath, 'base64');
@@ -122,15 +132,15 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 
                     // 이미지와 result 데이터를 함께 응답
                     const responseData = {
-                        storeName: storeInfo.storename,
+                        storeName: storeInfo.STORE_NAME,
                         image: imageBase64,
-                        ceoName: storeInfo.ceoName,
+                        ceoName: storeInfo.CEO_NAME,
                         crn: storeInfo.CRN,
-                        contact: storeInfo.contact,
-                        address: storeInfo.address,
-                        latitude: storeInfo.latitude,
-                        longitude: storeInfo.longitude,
-                        kind: storeInfo.kind
+                        contact: storeInfo.CONTACT,
+                        address: storeInfo.ADDRESS,
+                        latitude: storeInfo.LATITUDE,
+                        longitude: storeInfo.LONGITUDE,
+                        kind: storeInfo.KIND
                     };
 
                     res.json(responseData);
@@ -148,12 +158,12 @@ app.get("/db/storeinfo/:crn", (req, res) =>{
 
 // 사업자 등록번호 중복 방지를 위해
 // 저장된 사업자 등록 번호를 전달합니다.
-app.get("/db/companyregisternumber", (req, res) =>{
+app.get("/db/all-company-registration-number", (req, res) =>{
     connection.query(
         'SELECT crn FROM STORE_INFO',
         (err, result, fields) => {
             if (!err) {
-                console.log(result)
+                //console.log(result)
                 if (result) {
                     // 결과가 있을 때 (하나 이상의 행이 반환된 경우)
                     res.json(result);
@@ -169,12 +179,12 @@ app.get("/db/companyregisternumber", (req, res) =>{
 })
 
 // 새로운 매장 정보 저장
-app.post("/db/upload", upload.single('storeimage'), (req, res) => {
+app.post("/db/store-registration", uploadStoreMainImage.single('storeMainImage'), (req, res) => {
     console.log("post 요청이 수신 되었습니다.");
 
     try {
         const file = req.file;
-        const storename = req.body.storeName;
+        const storeName = req.body.storeName;
         const ceoName = req.body.ceoName;
         const CRN = req.body.crn;
         const contact = req.body.contact;
@@ -182,23 +192,21 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
         const latitude = req.body.latitude;
         const longitude = req.body.longitude;
         const kind = req.body.kind;
-
+        console.log("storeName : " + storeName);
         if (file) {
             const filePath = file.path;
 
             connection.query(
-                'INSERT INTO STORE_INFO(STORENAME, IMAGE_PATH, ceoName, CRN, contact, address, latitude, longitude, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [storename, filePath, ceoName, CRN, contact, address, latitude, longitude, kind],
+                'INSERT INTO STORE_INFO (CRN, STORE_NAME, IMAGE_PATH, CEO_NAME, CONTACT, ADDRESS, LATITUDE, LONGITUDE, KIND) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [CRN, storeName, filePath, ceoName, contact, address, latitude, longitude, kind],
 
                 (err, results, fields) => {
                     if (!err) {
                         console.log("이미지가 성공적으로 저장되었습니다.");
-                        res.send("이미지가 성공적으로 저장되었습니다.");
-                        //res.status(200).send("이미지가 성공적으로 저장되었습니다.");
+                        res.status(200).send("이미지가 성공적으로 저장되었습니다.");
                     } else {
                         console.error("이미지 저장 실패: ", err);
-                        res.send("이미지가 저장 실패.");
-                        //res.status(200).send("이미지 저장 실패");
+                        res.status(200).send("이미지 저장 실패");
                     }
                 }
             );
@@ -209,11 +217,62 @@ app.post("/db/upload", upload.single('storeimage'), (req, res) => {
     }
 });
 
-app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
+// 새로운 매장 메뉴 정보 저장
+app.post("/db/store-menu", uploadStoreMenuImage.array('storeMenuImage'), (req, res) => {
+    console.log("post 요청이 수신 되었습니다.");
+
+    try {
+        const files = req.files;
+        const storeMenus = req.body.storeMenus; // 배열로 전달되는 데이
+
+        if (files && storeMenus) {
+            const storeMenuInfoArray = [];
+        
+            files.forEach((file, index) =>{
+                const menuInfo = {
+                    crn: storeMenus[index].crn,
+                    productName: storeMenus[index].productName,
+                    productQuantity: storeMenus[index].productQuantity,
+                    productIntro: storeMenus[index].productIntro,
+                    IMAGE_PATH: file.path
+                };
+
+                storeMenuInfoArray.push(menuInfo);
+            });
+
+            storeMenuInfoArray.forEach((menuInfo) => {
+
+                connection.query(
+                    'INSERT INTO STORE_MENU (crn, productName, productQuantity, productIntro, IMAGE_PATH) VALUES (?, ?, ?, ?, ?)',
+                    [menuInfo.crn, menuInfo.productName, menuInfo.productQuantity, menuInfo.productIntro, menuInfo.IMAGE_PATH],
+    
+                    (err, results, fields) => {
+                        if (!err) {
+                            console.log("이미지가 성공적으로 저장되었습니다.");
+                            res.status(200).send("이미지가 성공적으로 저장되었습니다.");
+                        } else {
+                            console.error("이미지 저장 실패: ", err);
+                            res.status(200).send("이미지 저장 실패");
+                        }
+                    }
+                );
+            });
+            res.send("이미지가 성공적으로 저장되었습니다.");
+        }else {
+            res.status(400).send("요청에 필요한 데이터가 누락되었습니다.");
+        }
+        
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("오류 발생");
+    }
+});
+
+app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (req, res) =>{
     console.log("put 요청이 수신 되었습니다.");
 
     const file = req.file;
-    const storename = req.body.storeName;
+    const storeName = req.body.storeName;
     const ceoName = req.body.ceoName;
     const crn = req.body.crn;
     const contact = req.body.contact;
@@ -261,8 +320,8 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                         // 2. 업데이트 실행    
                         console.log("MySQL 데이터를 업데이트 합니다.");
                         connection.query(
-                            `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=?, image_path=? WHERE CRN=?`,
-                            [storename, ceoName, contact, address, latitude, longitude, kind, filePath, crn],
+                            `UPDATE STORE_INFO SET STORENAME=?, IMAGE_PATH=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, LONGITUDE=?, KIND=? WHERE CRN=?`,
+                            [storeName, filePath, ceoName, contact, address, latitude, longitude, kind],
 
                             (modifyErr, modifyResult, modifyFields) =>{
                                 if (modifyErr) {
@@ -272,10 +331,7 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
                                 }
 
                                 res.status(200).send("데이터 수정 성공");
-                            }
-
-                        
-                            )})
+                            })})
                     }catch (error) {
                         console.log(error);
                     }
@@ -288,8 +344,10 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
         // 사용자가 이미지를 수정하지 않았을 때
         // 전달받은 MySQL Data만 업데이트 합니다.
         connection.query(
-            `UPDATE STORE_INFO SET STORENAME=?, ceoName=?, contact=?, address=?, latitude=?, longitude=?, kind=? WHERE CRN=?`,
-            [storename, ceoName, contact, address, latitude, longitude, kind, crn],
+
+            `UPDATE STORE_INFO SET STORENAME=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, LONGITUDE=?, KIND=? WHERE CRN=?`,
+            [storeName, ceoName, contact, address, latitude, longitude, kind],
+
             (modifyErr, modifyResult, modifyFields) => {
                 if (modifyErr) {
                     console.error("MySQL 데이터 수정 오류:", modifyErr);
@@ -305,13 +363,13 @@ app.put("/db/modify-storeinfo", upload.single('storeImage'), (req, res) =>{
 })
 
 // 데이터 삭제
-app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
+app.delete("/db/delete-storeInfo/:crn",(req, res)=>{
     console.log("delete 요청이 수신 되었습니다.");
     const crn = req.params.crn;
-    
+    console.log(crn)
     // 사업자 등록번호를 Primary Key로 저장된 이미지 경로를 가져옵니다.
     connection.query(
-        `SELECT image_path FROM STORE_INFO WHERE CRN = ? `,
+        `SELECT IMAGE_PATH FROM STORE_INFO WHERE CRN = ? `,
         [crn],
         (selectErr, selectResult, selectFields) =>{
             // MySQL 에러
@@ -329,7 +387,8 @@ app.delete("/db/delete-storeinfo/:crn",(req, res)=>{
             }
             
             // 이미지 경로
-            const imagePath = selectResult[0].image_path;
+            const imagePath = selectResult[0].IMAGE_PATH;
+
             
             // Local Directory에 이미지가 존재하면 제거
             if(fs.existsSync(imagePath)){

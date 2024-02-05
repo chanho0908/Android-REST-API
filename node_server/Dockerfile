@@ -13,7 +13,10 @@ RUN npm install -g nodemon
 RUN mkdir -p /usr/src/app
 
 # store_images_volume 폴더 생성
-RUN mkdir /store_images_volume
+# -p : 이미 폴더가 있다면 무시
+RUN mkdir -p /store_images_volume/main
+
+RUN mkdir -p /store_images_volume/menu
 
 # WORKDIR은 명령을 실행하기 위한 디렉토리를 설정합니다.
 WORKDIR /usr/src/app

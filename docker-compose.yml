@@ -23,7 +23,8 @@ services:
     networks:
       - db-net
     volumes:
-      - ./node_server/uploads:/store_images_volume
+      - ./node_server/uploads/main:/store_images_volume/main
+      - ./node_server/uploads/menu:/store_images_volume/menu
   mysql:
     image: mysql:latest
     restart: always
