@@ -102,6 +102,7 @@ app.get("/db/storeInfo", (req, res) => {
 
                     res.json(responseData);
                 } else {
+                    console.log("MySQL에 저장된 데이터가 없습니다.")
                     res.status(404).send("No stores found");
                 }
             } else {
@@ -223,17 +224,17 @@ app.post("/db/store-menu", uploadStoreMenuImage.array('storeMenuImage'), (req, r
 
     try {
         const files = req.files;
-        const storeMenus = req.body.storeMenus; // 배열로 전달되는 데이
+        const storeMenues = req.body.storeMenus; // 배열로 전달되는 데이
 
-        if (files && storeMenus) {
+        if (files && storeMenues) {
             const storeMenuInfoArray = [];
         
             files.forEach((file, index) =>{
                 const menuInfo = {
-                    crn: storeMenus[index].crn,
-                    productName: storeMenus[index].productName,
-                    productQuantity: storeMenus[index].productQuantity,
-                    productIntro: storeMenus[index].productIntro,
+                    crn: storeMenues[index].crn,
+                    productName: storeMenues[index].productName,
+                    productQuantity: storeMenues[index].productQuantity,
+                    productIntro: storeMenues[index].productIntro,
                     IMAGE_PATH: file.path
                 };
 
@@ -289,7 +290,7 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
 
         // 1. 기존 이미지 저장 경로 추출
         connection.query( 
-            `SELECT image_path FROM STORE_INFO WHERE CRN = ?`,
+            `SELECT IMAGE_PATH FROM STORE_INFO WHERE CRN = ?`,
             [crn],
             (selectErr, selectResult, selectFields) =>{
                 if (selectErr) {
@@ -320,8 +321,9 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
                         // 2. 업데이트 실행    
                         console.log("MySQL 데이터를 업데이트 합니다.");
                         connection.query(
-                            `UPDATE STORE_INFO SET STORENAME=?, IMAGE_PATH=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, LONGITUDE=?, KIND=? WHERE CRN=?`,
-                            [storeName, filePath, ceoName, contact, address, latitude, longitude, kind],
+                            `UPDATE STORE_INFO SET STORE_NAME=?, IMAGE_PATH=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, 
+                            LONGITUDE=?, KIND=? WHERE CRN=?`,
+                            [storeName, filePath, ceoName, contact, address, latitude, longitude, kind, crn],
 
                             (modifyErr, modifyResult, modifyFields) =>{
                                 if (modifyErr) {
@@ -330,7 +332,7 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
                                     return;
                                 }
 
-                                res.status(200).send("데이터 수정 성공");
+                                res.status(200).send(storeName + "의 데이터가 수정되었습니다. ");
                             })})
                     }catch (error) {
                         console.log(error);
@@ -345,8 +347,8 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
         // 전달받은 MySQL Data만 업데이트 합니다.
         connection.query(
 
-            `UPDATE STORE_INFO SET STORENAME=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, LONGITUDE=?, KIND=? WHERE CRN=?`,
-            [storeName, ceoName, contact, address, latitude, longitude, kind],
+            `UPDATE STORE_INFO SET STORE_NAME=?, CEO_NAME=?, CONTACT=?, ADDRESS=?, LATITUDE=?, LONGITUDE=?, KIND=? WHERE CRN=?`,
+            [storeName, ceoName, contact, address, latitude, longitude, kind, crn],
 
             (modifyErr, modifyResult, modifyFields) => {
                 if (modifyErr) {
@@ -355,7 +357,7 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
                     return;
                 }
 
-                res.status(200).send("Data updated successfully");
+                res.status(200).send(storeName + "의 데이터가 수정되었습니다. ");
             }
         );
     }
@@ -366,7 +368,7 @@ app.put("/db/modify-storeInfo", uploadStoreMainImage.single('storeMainImage'), (
 app.delete("/db/delete-storeInfo/:crn",(req, res)=>{
     console.log("delete 요청이 수신 되었습니다.");
     const crn = req.params.crn;
-    console.log(crn)
+    
     // 사업자 등록번호를 Primary Key로 저장된 이미지 경로를 가져옵니다.
     connection.query(
         `SELECT IMAGE_PATH FROM STORE_INFO WHERE CRN = ? `,
