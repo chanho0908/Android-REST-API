@@ -2,6 +2,7 @@
 // NET Stop HTTP
 const express = require('express');
 const multer = require('multer');
+const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2');
 const { log } = require('console');
@@ -73,6 +74,22 @@ const connection = mysql.createConnection({
     database: 'cloudbridge_database'
 });
 
+app.get("/db/my-store-main-image", (req, res) => {
+    let imagePath = req.query.imagePath; // 요청에서 imagePath 쿼리 파라미터 추출
+    
+    if (!imagePath) {
+        return res.status(400).send({ error: "imagePath is required" });
+    }
+    const imageBase64 = fs.readFileSync(imagePath, 'base64');
+
+    const responseData = { storeMainImage: imageBase64 }
+
+    res.setHeader('Content-Type', 'image/*');
+    res.json(responseData);
+
+});
+
+
 // 모든 매장 정보를 가져오기 위한 요청
 app.get("/db/storeInfo", (req, res) => {
     connection.query(
@@ -83,13 +100,13 @@ app.get("/db/storeInfo", (req, res) => {
                 if (results.length > 0) {
                     const responseData = results.map( storeInfo => {
                         console.log(storeInfo)
-                        const imgPath = storeInfo.IMAGE_PATH;
 
-                        const imageBase64 = fs.readFileSync(imgPath, 'base64');
-
+                        // '/store_images_volume/main/main_img1707753283856.jpg'
+                        //const imageBase64 = fs.readFileSync(imgPath, 'base64');
+                        console.log("IMAGE_PATH: " + storeInfo.IMAGE_PATH)
                         return {
                             storeName: storeInfo.STORE_NAME,
-                            image: imageBase64,
+                            imagePath: storeInfo.IMAGE_PATH,
                             ceoName: storeInfo.CEO_NAME,
                             crn: storeInfo.CRN,
                             contact: storeInfo.CONTACT,
@@ -100,6 +117,7 @@ app.get("/db/storeInfo", (req, res) => {
                         };
                     });
 
+                    res.setHeader('Content-Type', 'image/*');
                     res.json(responseData);
                 } else {
                     console.log("MySQL에 저장된 데이터가 없습니다.")
@@ -124,17 +142,14 @@ app.get("/db/storeInfo/:crn", (req, res) =>{
                 // 쿼리가 성공하면 결과를 클라이언트에게 보냄
                 const storeInfo = result[0];
                 if(storeInfo){
-                    const imgPath = storeInfo.IMAGE_PATH;
                     
                     // 이미지를 Base64로 인코딩
-                    const imageBase64 = fs.readFileSync(imgPath, 'base64');
-
-                    res.setHeader('Content-Type', 'image/*');
+                    //const imageBase64 = fs.readFileSync(imgPath, 'base64');            
 
                     // 이미지와 result 데이터를 함께 응답
                     const responseData = {
                         storeName: storeInfo.STORE_NAME,
-                        image: imageBase64,
+                        imagePath: storeInfo.IMAGE_PATH,
                         ceoName: storeInfo.CEO_NAME,
                         crn: storeInfo.CRN,
                         contact: storeInfo.CONTACT,
@@ -144,6 +159,7 @@ app.get("/db/storeInfo/:crn", (req, res) =>{
                         kind: storeInfo.KIND
                     };
 
+                    res.setHeader('Content-Type', 'image/*');
                     res.json(responseData);
                 }else{
                     res.status(404).send("Store not found");
